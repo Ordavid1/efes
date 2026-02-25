@@ -1,0 +1,58 @@
+{
+  "fetchedAt": "2026-02-25T20:42:01.645499Z",
+  "fetchedAtLocal": "25/02/2026 22:42",
+  "files": {
+    "archaeological-sites.geojson": {
+      "features": 201,
+      "sizeKB": 88
+    },
+    "conservation-buildings.geojson": {
+      "features": 1977,
+      "sizeKB": 2868
+    },
+    "neighborhoods.geojson": {
+      "features": 76,
+      "sizeKB": 770
+    },
+    "preservation-areas.geojson": {
+      "features": 254,
+      "sizeKB": 675
+    },
+    "preservation-surveys-completed.geojson": {
+      "features": 44,
+      "sizeKB": 79
+    },
+    "preservation-surveys-in-progress.geojson": {
+      "features": 14,
+      "sizeKB": 33
+    },
+    "quarters.geojson": {
+      "features": 9,
+      "sizeKB": 398
+    },
+    "statistical-areas.geojson": {
+      "features": 106,
+      "sizeKB": 893
+    },
+    "streets.geojson": {
+      "features": 1324,
+      "sizeKB": 5352
+    },
+    "sub-quarters.geojson": {
+      "features": 28,
+      "sizeKB": 556
+    },
+    "unesco-buffer.geojson": {
+      "features": 1,
+      "sizeKB": 21
+    },
+    "unesco-core.geojson": {
+      "features": 2,
+      "sizeKB": 11
+    },
+    "zoning.geojson": {
+      "features": 42565,
+      "sizeKB": 55892
+    }
+  }
+}

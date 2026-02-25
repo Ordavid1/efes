@@ -1,0 +1,72 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+.pnp.cjs
+.yarn/
+yarn.lock
+*.tgz
+
+# next.js
+.next/
+out/
+
+# build
+build/
+dist/
+
+# env files
+.env
+.env.*
+!.env.example
+
+# logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# typescript
+tsconfig.tsbuildinfo
+next-env.d.ts
+*.tsbuildinfo
+
+# IDE & editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+._*
+
+# claude / AI
+.claude/
+
+# docs & binary files
+docs/
+additional.files/
+
+# secrets & certificates
+*.pem
+*.key
+*.cert
+*.p12
+
+# vercel
+.vercel
+
+# testing
+coverage/
+.nyc_output/
+
+# misc
+.eslintcache
+.turbo/
+*.cache

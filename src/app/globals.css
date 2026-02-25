@@ -1,0 +1,123 @@
+@import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --map-panel-width: 55%;
+  --calc-panel-width: 45%;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Heebo', Arial, sans-serif;
+  direction: rtl;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  height: 100vh;
+}
+
+/* MapLibre overrides for RTL */
+.maplibregl-ctrl-top-right {
+  left: 10px;
+  right: auto;
+}
+
+.maplibregl-ctrl-top-left {
+  right: 10px;
+  left: auto;
+}
+
+/* Custom scrollbar for calculator panel */
+.calc-panel::-webkit-scrollbar {
+  width: 6px;
+}
+
+.calc-panel::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.calc-panel::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.calc-panel::-webkit-scrollbar-thumb:hover {
+  background: #a1a1a1;
+}
+
+/* Report table styles */
+.efes-table {
+  border-collapse: collapse;
+  width: 100%;
+  direction: rtl;
+  font-size: 0.875rem;
+}
+
+.efes-table th,
+.efes-table td {
+  border: 1px solid #d1d5db;
+  padding: 6px 10px;
+  text-align: right;
+}
+
+.efes-table th {
+  background-color: #1e3a5f;
+  color: white;
+  font-weight: 600;
+}
+
+.efes-table .section-header {
+  background-color: #4a90d9;
+  color: white;
+  font-weight: 600;
+  text-align: center;
+}
+
+.efes-table .subtotal-row {
+  background-color: #e8f0fe;
+  font-weight: 600;
+}
+
+.efes-table .total-row {
+  background-color: #1e3a5f;
+  color: white;
+  font-weight: 700;
+}
+
+.efes-table .summary-row {
+  background-color: #f0fdf4;
+  font-weight: 600;
+}
+
+/* Warning banners */
+.warning-blocked {
+  @apply bg-red-50 border-red-500 text-red-800;
+}
+
+.warning-limited {
+  @apply bg-yellow-50 border-yellow-500 text-yellow-800;
+}
+
+.warning-redirected {
+  @apply bg-blue-50 border-blue-500 text-blue-800;
+}
+
+.warning-pending {
+  @apply bg-gray-50 border-gray-400 text-gray-700;
+}
+
+/* Tab styles */
+.tab-active {
+  @apply border-b-2 border-haifa-blue text-haifa-blue font-semibold;
+}
+
+.tab-inactive {
+  @apply text-gray-500 hover:text-gray-700;
+}
