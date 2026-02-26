@@ -11,6 +11,7 @@ const defaultBuildingInput: BuildingInput = {
   existingFloors: 0,
   existingUnitsPerFloor: 0,
   totalExistingUnits: 0,
+  totalRightsHolders: undefined,
   existingUnitsInBuilding: 0,
   pilotisArea: TAMA38_RULES.DEFAULT_PILOTIS_AREA,
   buildingType: 'multi_family',
@@ -18,8 +19,12 @@ const defaultBuildingInput: BuildingInput = {
   minApartmentSize: TAMA38_RULES.DEFAULT_AVG_APARTMENT,
   buildingPercentage: TAMA38_RULES.DEFAULT_BUILDING_PCT,
   additionalFloors: 2.5,
-  returnPerUnit: TAMA38_RULES.DEFAULT_RETURN_ADDITION,
+  primaryReturnPerUnit: TAMA38_RULES.PRIMARY_RETURN_PER_UNIT,
+  mamadReturnPerUnit: TAMA38_RULES.MAMAD_RETURN_PER_UNIT,
   plotArea: 0,
+  densityPerDunam: undefined,
+  mamadSize: undefined,
+  isBuildingH: false,
 }
 
 export const useStore = create<AppState>((set) => ({
@@ -49,6 +54,10 @@ export const useStore = create<AppState>((set) => ({
     'unesco-buffer': false,
   },
 
+  // HFP/2666 manual overrides
+  manualHfpDistrictId: null,
+  manualHfpSubAreaId: null,
+
   // Actions
   setSelectedParcel: (parcel) => set({ selectedParcel: parcel }),
   setParcelGeoData: (data) => set({ parcelGeoData: data }),
@@ -70,6 +79,11 @@ export const useStore = create<AppState>((set) => ({
         [layerId]: !state.layerVisibility[layerId],
       },
     })),
+  setManualHfpDistrict: (districtId, subAreaId) =>
+    set({
+      manualHfpDistrictId: districtId,
+      manualHfpSubAreaId: subAreaId ?? null,
+    }),
   resetAll: () =>
     set({
       selectedParcel: null,
@@ -82,5 +96,7 @@ export const useStore = create<AppState>((set) => ({
       activeTab: 'tama38',
       isLoading: false,
       error: null,
+      manualHfpDistrictId: null,
+      manualHfpSubAreaId: null,
     }),
 }))

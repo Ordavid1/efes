@@ -11,7 +11,7 @@ import { EfesReport } from './EfesReport'
 import { runFilterPipeline } from '@/lib/engine/filters'
 import { calculateTama38 } from '@/lib/engine/tama38'
 import { calculateShaked } from '@/lib/engine/shaked'
-import { calculateHfp2666 } from '@/lib/engine/hfp2666'
+import { calculateHfp2666, calculateBuildingH } from '@/lib/engine/hfp2666'
 import { useCallback, useEffect, useState } from 'react'
 
 export function CalculatorPanel() {
@@ -24,6 +24,8 @@ export function CalculatorPanel() {
     shakedResult,
     hfp2666Result,
     activeTab,
+    manualHfpDistrictId,
+    manualHfpSubAreaId,
     setActiveTab,
     setBuildingInput,
     setFilterResult,
@@ -32,12 +34,22 @@ export function CalculatorPanel() {
     setHfp2666Result,
   } = useStore()
 
-  // Auto-sync plot area from GIS data when a new parcel is selected
+  // Auto-sync plot area and density from GIS data when a new parcel is selected
   useEffect(() => {
     if (parcelGeoData?.plotArea) {
       setBuildingInput({ plotArea: parcelGeoData.plotArea })
     }
   }, [parcelGeoData?.parcelId?.gush, parcelGeoData?.parcelId?.helka, parcelGeoData?.plotArea, setBuildingInput])
+
+  // Auto-fill density from HFP/2666 resolved sub-area
+  useEffect(() => {
+    if (parcelGeoData && hfp2666Result?.subArea?.unitsPerDunam) {
+      const maxDensity = hfp2666Result.subArea.unitsPerDunam
+      if (maxDensity && !buildingInput.densityPerDunam) {
+        setBuildingInput({ densityPerDunam: maxDensity })
+      }
+    }
+  }, [hfp2666Result?.subArea?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Run calculations whenever inputs change
   const runCalculations = useCallback(() => {
@@ -60,12 +72,14 @@ export function CalculatorPanel() {
     }
 
     if (filters.allowHfp2666) {
-      const hfp = calculateHfp2666(buildingInput, parcelGeoData)
+      const hfp = buildingInput.isBuildingH
+        ? calculateBuildingH(buildingInput, parcelGeoData)
+        : calculateHfp2666(buildingInput, parcelGeoData, manualHfpDistrictId, manualHfpSubAreaId)
       setHfp2666Result(hfp)
     } else {
       setHfp2666Result(null)
     }
-  }, [parcelGeoData, buildingInput, setFilterResult, setTama38Result, setShakedResult, setHfp2666Result])
+  }, [parcelGeoData, buildingInput, manualHfpDistrictId, manualHfpSubAreaId, setFilterResult, setTama38Result, setShakedResult, setHfp2666Result])
 
   useEffect(() => {
     if (buildingInput.existingContour > 0) {

@@ -45,7 +45,8 @@ export interface BuildingInput {
   existingContour: number // m² קונטור קומה קיימת
   existingFloors: number // מספר קומות קיימות
   existingUnitsPerFloor: number // דירות בקומה טיפוסית
-  totalExistingUnits: number // סה"כ דירות קיימות
+  totalExistingUnits: number // סה"כ דירות קיימות (לחישוב הרחבה)
+  totalRightsHolders?: number // סה"כ בעלי זכויות כולל קומת קרקע (לחישוב החזרה) - defaults to totalExistingUnits
   existingUnitsInBuilding: number // מס. דירות קיימות בקומה טיפוסית
   pilotisArea: number // שטח עמודים מפולשת (m²)
   buildingType: 'multi_family' | 'single_family' | 'duplex'
@@ -53,9 +54,13 @@ export interface BuildingInput {
   minApartmentSize: number // שטח דירה מינימלי (default 85)
   buildingPercentage: number // אחוזי בנייה (default 0.60)
   additionalFloors: number // קומות מוצעות
-  returnPerUnit: number // תוספת מ"ר לדירה מוחזרת (default 12)
+  primaryReturnPerUnit: number // תוספת שטח עיקרי לדירה מוחזרת (default 13 - TAMA expansion only)
+  mamadReturnPerUnit: number // ממ"ד לדירה מוחזרת (default 12)
   estimatedValuePerSqm?: number // שווי מוערך למ"ר (₪) - optional, for Shaked levy calc
   plotArea: number // שטח מגרש (מ"ר) - auto-filled from GIS, editable by user
+  densityPerDunam?: number // צפיפות יח"ד לדונם - auto-filled from HFP/2666 district
+  mamadSize?: number // שטח ממ"ד בפועל (מ"ר) - default 12, if > 12 triggers auto-deduction
+  isBuildingH?: boolean // מבני H — H-shaped building, uses ×3 existing gross citywide
 }
 
 /** Exclusion filter result */
@@ -102,9 +107,12 @@ export interface Tama38Result {
 
   // Section 4: Unit Derivation
   minApartmentSize: number // שטח דירה מינימלי
-  potentialUnitsLow: number // סה"כ מס. דירות עפ"י מדיניות (low)
-  potentialUnitsHigh: number // סה"כ מס. דירות עפ"י מדיניות (high)
-  existingUnitsToReturn: number // דירות קיימות
+  areaBasedUnitsLow: number // יח"ד מחישוב שטח (floor)
+  areaBasedUnitsHigh: number // יח"ד מחישוב שטח (ceil)
+  densityBasedUnits?: number // יח"ד מחישוב צפיפות לדונם
+  potentialUnitsLow: number // סה"כ מס. דירות עפ"י מדיניות (low) = max(area, density)
+  potentialUnitsHigh: number // סה"כ מס. דירות עפ"י מדיניות (high) = max(area, density)
+  existingUnitsToReturn: number // בעלי זכויות להחזרה
   developerUnitsLow: number // דירות מוצעות (low)
   developerUnitsHigh: number // דירות מוצעות (high)
 
@@ -119,11 +127,29 @@ export interface Tama38Result {
 
   // Section 6: Summary (סיכום)
   returnedPrimaryToTenants: number // סה"כ החזרת שטח עיקרי לדיירים
-  returnedServiceToTenants: number // סה"כ החזרת שטח פלדלת לדיירים
+  returnedMamadToTenants: number // ממ"ד מוחזר לדיירים = MAMAD × rightsHolders
+  returnedServiceToTenants: number // סה"כ שירות מוחזר (ממ"ד בלבד, ללא מרפסת)
   developerPrimary: number // סה"כ שטח עיקרי נותר ליזם
-  developerService: number // סה"כ שטח פלדלת נותר ליזם
+  developerService: number // סה"כ שטח שירות נותר ליזם
   totalPrimaryProject: number // סה"כ שטח עיקרי לפרויקט
-  totalServiceProject: number // סה"כ שטח פלדלת לפרויקט
+  totalServiceProject: number // סה"כ שטח שירות לפרויקט
+
+  // Section 6b: Paledelet (פלדלת = שטח עיקרי + ממ"ד, ללא מרפסת)
+  totalPaledelet: number // סה"כ פלדלת = totalPrimaryArea + totalMamad
+  returnedPaledelToTenants: number // פלדלת מוחזרת = returnedPrimary + returnedMamad
+  developerPaledelet: number // פלדלת יזם = totalPaledelet - returnedPaledelet
+
+  // Section 7: MAMAD Cap (תקרת ממ"ד - תקנה 2025)
+  mamadExcessPerUnit: number // עודף ממ"ד ליחידה (mamadSize - 12, min 0)
+  mamadExcessDeduction: number // ניכוי כולל מהשטח העיקרי
+  mamadCapWarning: boolean // true if mamadSize > 12
+
+  // Section 8: Inclusive Housing (דיור מכליל - חפ/מד/2699)
+  inclusiveHousingApplies: boolean
+  inclusiveHousingRate: number
+  inclusiveHousingUnits: number // ceil(developerUnitsHigh × rate)
+  inclusiveHousingArea: number // inclusiveUnits × maxUnitSize
+  developerMarketableUnits: number // developerUnitsHigh - inclusiveUnits
 
   // Metadata
   buildingInfo: {
@@ -145,20 +171,42 @@ export interface ShakedResult extends Tama38Result {
   }
 }
 
-/** HFP/2666 District */
+/** HFP/2666 Sub-area within a district (2025 Table 5) */
+export interface Hfp2666SubArea {
+  id: string               // "1a", "4b", etc.
+  districtId: number       // parent district 1-10
+  name: string             // Hebrew name
+  multiplier: number       // residential multiplier (e.g., 2.50 = 250%)
+  commercialBonus: number  // additional commercial % (0 if none, 0.15 = 15%)
+  maxFloors: number        // max floors (higher value for slope-descending)
+  unitsPerDunam: number    // max density (units/dunam)
+  condition?: {
+    type: 'min_existing_units' | 'max_existing_units' | 'strengthening_only' | 'parcel_consolidation' | 'focal_hub'
+    threshold?: number     // for unit count conditions
+    minParcels?: number    // for parcel_consolidation: minimum parcels to consolidate
+    minAreaDunams?: number // for focal_hub: minimum consolidated area in dunams
+  }
+  isDefault?: boolean      // fallback sub-area when no condition matches
+}
+
+/** HFP/2666 District (parent grouping — 10 planning districts) */
 export interface Hfp2666District {
   id: number
   name: string
-  multiplier: number | null // null = data pending
-  maxFloors: number
-  unitsPerDunam: [number, number] // [min, max]
-  residential?: boolean
+  subAreas: Hfp2666SubArea[]
 }
 
 /** HFP/2666 Calculation Result */
 export interface Hfp2666Result {
-  district: Hfp2666District
+  district: Hfp2666District | null
+  subArea: Hfp2666SubArea | null
   districtDataAvailable: boolean
+  isStrengtheningOnly: boolean // true for areas that only allow 25 sqm/unit
+  strengthenAddition: number | null // total addition for strengthening-only (25 × units)
+  isBuildingH: boolean // true when using Building H ×3 existing gross calc
+  isSmallBuildingOverride: boolean // true when <4 units in districts 4-10 caps at 135%
+  existingGrossArea: number | null // for Building H: contour × floors
+  commercialBonus: number // commercial bonus % for display
   plotArea: number
   multiplier: number | null
   rawPrimaryArea: number | null // plotArea × multiplier
@@ -175,9 +223,19 @@ export interface Hfp2666Result {
   totalBalcony: number | null
   // Summary
   returnedPrimaryToTenants: number
+  returnedMamadToTenants: number
   returnedServiceToTenants: number
   developerPrimary: number | null
   developerService: number | null
+  // Paledelet
+  totalPaledelet: number | null
+  returnedPaledelToTenants: number
+  developerPaledelet: number | null
+  // Inclusive Housing
+  inclusiveHousingApplies: boolean
+  inclusiveHousingRate: number
+  inclusiveHousingUnits: number
+  developerMarketableUnits: number | null
 }
 
 /** Combined Efes Report */
@@ -223,6 +281,10 @@ export interface AppState {
   error: string | null
   layerVisibility: Record<string, boolean>
 
+  // HFP/2666 manual overrides
+  manualHfpDistrictId: number | null
+  manualHfpSubAreaId: string | null
+
   // Actions
   setSelectedParcel: (parcel: ParcelId | null) => void
   setParcelGeoData: (data: ParcelGeoData | null) => void
@@ -235,5 +297,6 @@ export interface AppState {
   setLoading: (loading: boolean) => void
   setError: (error: string | null) => void
   toggleLayer: (layerId: string) => void
+  setManualHfpDistrict: (districtId: number | null, subAreaId?: string | null) => void
   resetAll: () => void
 }

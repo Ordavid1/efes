@@ -3,9 +3,9 @@
 import { useStore } from '@/lib/hooks/useStore'
 
 export function UserInputForm() {
-  const { buildingInput, setBuildingInput, selectedParcel, parcelGeoData } = useStore()
+  const { buildingInput, setBuildingInput, parcelGeoData } = useStore()
 
-  const updateField = (field: string, value: number | string | boolean) => {
+  const updateField = (field: string, value: number | string | boolean | undefined) => {
     setBuildingInput({ [field]: value })
   }
 
@@ -19,7 +19,7 @@ export function UserInputForm() {
   return (
     <div>
       <h3 className="text-sm font-bold text-gray-700 font-hebrew mb-3 flex items-center gap-2">
-        📝 נתוני מבנה קיים
+        נתוני מבנה קיים
       </h3>
 
       <div className="grid grid-cols-2 gap-3">
@@ -68,7 +68,7 @@ export function UserInputForm() {
         {/* סה״כ דירות קיימות */}
         <div>
           <label className="block text-xs text-gray-500 font-hebrew mb-1">
-            סה״כ דירות קיימות
+            סה״כ דירות קיימות (להרחבה)
           </label>
           <input
             type="number"
@@ -77,6 +77,21 @@ export function UserInputForm() {
             placeholder="2"
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-hebrew focus:border-haifa-blue focus:ring-1 focus:ring-haifa-blue outline-none bg-blue-50"
           />
+        </div>
+
+        {/* בעלי זכויות */}
+        <div>
+          <label className="block text-xs text-gray-500 font-hebrew mb-1">
+            בעלי זכויות (כולל קרקע)
+          </label>
+          <input
+            type="number"
+            value={buildingInput.totalRightsHolders || ''}
+            onChange={(e) => updateField('totalRightsHolders', Number(e.target.value) || undefined)}
+            placeholder={String(buildingInput.totalExistingUnits || '')}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-hebrew focus:border-haifa-blue focus:ring-1 focus:ring-haifa-blue outline-none"
+          />
+          <p className="text-[10px] text-gray-400 font-hebrew mt-0.5">אם שונה ממספר דירות להרחבה</p>
         </div>
 
         {/* קומות מוצעות */}
@@ -111,7 +126,7 @@ export function UserInputForm() {
         {/* שטח מגרש - auto-filled from GIS, editable by user */}
         <div>
           <label className="block text-xs text-gray-500 font-hebrew mb-1">
-            שטח מגרש (מ״ר) {parcelGeoData?.plotArea ? '🔗' : ''}
+            שטח מגרש (מ״ר) {parcelGeoData?.plotArea ? ' *' : ''}
           </label>
           <input
             type="number"
@@ -126,7 +141,6 @@ export function UserInputForm() {
         <div>
           <label className="block text-xs text-gray-500 font-hebrew mb-1">
             אחוזי בנייה (ת.ב.ע)
-            <span className="text-amber-500 mr-1" title="בדוק לפי תב&quot;ע ספציפית של המגרש">⚡</span>
           </label>
           <div className="flex items-center gap-1">
             <input
@@ -141,7 +155,7 @@ export function UserInputForm() {
           <p className="text-[10px] text-amber-600 font-hebrew mt-0.5">ברירת מחדל 60%. בדוק לפי תב״ע ספציפית</p>
         </div>
 
-        {/* שטח דירה ממוצעת - used for unit count derivation */}
+        {/* שטח דירה ממוצעת */}
         <div>
           <label className="block text-xs text-gray-500 font-hebrew mb-1">
             שטח דירה ממוצעת (מ״ר)
@@ -156,25 +170,70 @@ export function UserInputForm() {
           <p className="text-[10px] text-gray-400 font-hebrew mt-0.5">לחישוב מספר דירות פוטנציאליות</p>
         </div>
 
-        {/* תוספת לדירה מוחזרת */}
+        {/* צפיפות לדונם */}
         <div>
           <label className="block text-xs text-gray-500 font-hebrew mb-1">
-            תוספת לדירה מוחזרת (מ״ר)
+            צפיפות לדונם (יח״ד)
           </label>
           <input
             type="number"
-            value={buildingInput.returnPerUnit || ''}
-            onChange={(e) => updateField('returnPerUnit', Number(e.target.value))}
+            value={buildingInput.densityPerDunam || ''}
+            onChange={(e) => updateField('densityPerDunam', Number(e.target.value) || undefined)}
+            placeholder="15"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-hebrew focus:border-haifa-blue focus:ring-1 focus:ring-haifa-blue outline-none"
+          />
+          <p className="text-[10px] text-gray-400 font-hebrew mt-0.5">ממולא אוטו. מחפ/2666</p>
+        </div>
+
+        {/* תוספת שטח עיקרי לדירה מוחזרת */}
+        <div>
+          <label className="block text-xs text-gray-500 font-hebrew mb-1">
+            תוספת עיקרי לדירה מוחזרת
+          </label>
+          <input
+            type="number"
+            value={buildingInput.primaryReturnPerUnit || ''}
+            onChange={(e) => updateField('primaryReturnPerUnit', Number(e.target.value))}
+            placeholder="13"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-hebrew focus:border-haifa-blue focus:ring-1 focus:ring-haifa-blue outline-none"
+          />
+          <p className="text-[10px] text-gray-400 font-hebrew mt-0.5">13 מ״ר הרחבת תמ״א</p>
+        </div>
+
+        {/* ממ"ד לדירה מוחזרת */}
+        <div>
+          <label className="block text-xs text-gray-500 font-hebrew mb-1">
+            ממ״ד לדירה מוחזרת (מ״ר)
+          </label>
+          <input
+            type="number"
+            value={buildingInput.mamadReturnPerUnit || ''}
+            onChange={(e) => updateField('mamadReturnPerUnit', Number(e.target.value))}
             placeholder="12"
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-hebrew focus:border-haifa-blue focus:ring-1 focus:ring-haifa-blue outline-none"
           />
+          <p className="text-[10px] text-gray-400 font-hebrew mt-0.5">12 מ״ר תקני</p>
+        </div>
+
+        {/* שטח ממ"ד בפועל */}
+        <div>
+          <label className="block text-xs text-gray-500 font-hebrew mb-1">
+            שטח ממ״ד בפועל (מ״ר)
+          </label>
+          <input
+            type="number"
+            value={buildingInput.mamadSize || ''}
+            onChange={(e) => updateField('mamadSize', Number(e.target.value) || undefined)}
+            placeholder="12"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-hebrew focus:border-haifa-blue focus:ring-1 focus:ring-haifa-blue outline-none"
+          />
+          <p className="text-[10px] text-gray-400 font-hebrew mt-0.5">אם &gt; 12, עודף ינוכה</p>
         </div>
 
         {/* שווי מוערך למ"ר - for Shaked betterment levy */}
         <div>
           <label className="block text-xs text-gray-500 font-hebrew mb-1">
             שווי מוערך למ״ר (₪)
-            <span className="text-purple-500 mr-1" title="לחישוב היטל השבחה בחלופת שקד">💰</span>
           </label>
           <input
             type="number"
@@ -210,6 +269,16 @@ export function UserInputForm() {
             className="rounded border-gray-300 text-haifa-blue focus:ring-haifa-blue"
           />
           <span className="text-gray-600">מומש תמ״א 38</span>
+        </label>
+
+        <label className="flex items-center gap-1.5 text-xs font-hebrew cursor-pointer" title="בניין מגורים בצורת האות H — חישוב פי 3 מהנפח הקיים">
+          <input
+            type="checkbox"
+            checked={buildingInput.isBuildingH || false}
+            onChange={(e) => updateField('isBuildingH', e.target.checked)}
+            className="rounded border-gray-300 text-teal-600 focus:ring-teal-600"
+          />
+          <span className="text-gray-600">מבנה H</span>
         </label>
       </div>
     </div>

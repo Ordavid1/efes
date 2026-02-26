@@ -120,16 +120,13 @@ function checkPinuiBinuiArea(geoData: ParcelGeoData): FilterResult {
   return clearResult()
 }
 
-/** Filter 4: Single/Dual Family Home */
+/** Filter 4: Single Family Home (חד משפחתי — 1 unit only) */
 function checkSingleFamilyHome(buildingInput: BuildingInput): FilterResult {
-  if (
-    buildingInput.buildingType === 'single_family' ||
-    (buildingInput.buildingType === 'duplex' && buildingInput.totalExistingUnits <= 1)
-  ) {
+  if (buildingInput.buildingType === 'single_family') {
     return {
       status: 'LIMITED',
-      reason: 'בית חד/דו-משפחתי',
-      details: 'בתים חד ודו-משפחתיים מוחרגים ממנגנוני תמ"א 38. זכאים לתוספת חיזוק סייסמי בסיסית בלבד (25 מ"ר ממ"ד) ללא יצירת יחידות דיור חדשות.',
+      reason: 'בית חד-משפחתי (יח״ד אחת)',
+      details: 'מבנה הכולל יח״ד אחת בלבד ("חד משפחתי") זכאי לתוספת חיזוק סייסמי של 25 מ״ר בלבד (כולל ממ״ד). לא יותרו תוספת יח״ד וקומות מכח תמ״א 38.',
       allowTama38: false,
       allowShaked: false,
       allowHfp2666: false,

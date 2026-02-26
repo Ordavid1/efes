@@ -4,7 +4,23 @@
 // ============================================================
 
 import type { BuildingInput, ParcelGeoData, Tama38Result } from './types'
-import { TAMA38_RULES } from '../data/rules'
+import { TAMA38_RULES, INCLUSIVE_HOUSING_DISTRICTS } from '../data/rules'
+import type { InclusiveHousingDistrict } from '../data/rules'
+
+/**
+ * Find inclusive housing district by neighborhood name
+ */
+function findInclusiveHousingDistrict(neighborhood: string | null): InclusiveHousingDistrict | null {
+  if (!neighborhood) return null
+  for (const district of INCLUSIVE_HOUSING_DISTRICTS) {
+    for (const n of district.neighborhoods) {
+      if (neighborhood.includes(n) || n.includes(neighborhood)) {
+        return district
+      }
+    }
+  }
+  return null
+}
 
 /**
  * Calculate building rights under TAMA 38 demolition-rebuild track
@@ -23,11 +39,15 @@ export function calculateTama38(
     pilotisArea,
     buildingPercentage,
     minApartmentSize,
-    returnPerUnit,
+    primaryReturnPerUnit,
+    mamadReturnPerUnit,
   } = buildingInput
 
   const plotArea = buildingInput.plotArea || geoData.plotArea
   const plotAreaForCalc = plotArea // After deducting הפקעות if any
+
+  // Rights holders: separate from expansion units (Test 3)
+  const rightsHolders = buildingInput.totalRightsHolders ?? totalExistingUnits
 
   // ========================================
   // Section 1: TAMA Policy Areas
@@ -41,7 +61,7 @@ export function calculateTama38(
   // סה"כ קומה טיפוסית מורחבת × קומות מוצעות
   const expandedTotal = expandedTypicalFloor * additionalFloors
 
-  // תוספת עבור דירות קיימות (13 × סה"כ דירות)
+  // תוספת עבור דירות קיימות (13 × סה"כ דירות) — uses totalExistingUnits, NOT rightsHolders
   const existingUnitBonus = totalExistingUnits * TAMA38_RULES.EXPANSION_PER_UNIT
 
   // תוספת שטחים בגין קומת עמודים מפולשת
@@ -59,7 +79,6 @@ export function calculateTama38(
   const tbeBaseArea = Math.round(plotAreaForCalc * buildingPercentage)
 
   // הקלה 6% — תוספת 6% על שטח המגרש (לא על שטח הבסיס)
-  // מקור: חפ/מד/2500 מדיניות 2020, סעיף 4.11
   const reliefPercentage = TAMA38_RULES.SHEVES_RELIEF
   const tbeRelief = Math.round(plotAreaForCalc * reliefPercentage)
 
@@ -80,9 +99,27 @@ export function calculateTama38(
   // גזירת מספר יחידות דיור
   // ========================================
   const avgSize = minApartmentSize || TAMA38_RULES.DEFAULT_AVG_APARTMENT
-  const potentialUnitsLow = Math.floor(totalPrimaryArea / avgSize)
-  const potentialUnitsHigh = Math.ceil(totalPrimaryArea / avgSize)
-  const existingUnitsToReturn = totalExistingUnits
+
+  // Method A: Area-based derivation
+  const areaBasedUnitsLow = Math.floor(totalPrimaryArea / avgSize)
+  const areaBasedUnitsHigh = Math.ceil(totalPrimaryArea / avgSize)
+
+  // Method B: Density-based derivation (if densityPerDunam provided)
+  const densityPerDunam = buildingInput.densityPerDunam
+  let densityBasedUnits: number | undefined
+  if (densityPerDunam && densityPerDunam > 0 && plotArea > 0) {
+    densityBasedUnits = Math.floor((plotArea / 1000) * densityPerDunam)
+  }
+
+  // Final: take MAX of both methods (Test 2)
+  const potentialUnitsHigh = densityBasedUnits !== undefined
+    ? Math.max(areaBasedUnitsHigh, densityBasedUnits)
+    : areaBasedUnitsHigh
+  const potentialUnitsLow = densityBasedUnits !== undefined
+    ? Math.max(areaBasedUnitsLow, densityBasedUnits)
+    : areaBasedUnitsLow
+
+  const existingUnitsToReturn = rightsHolders
   const developerUnitsLow = potentialUnitsLow - existingUnitsToReturn
   const developerUnitsHigh = potentialUnitsHigh - existingUnitsToReturn
 
@@ -91,7 +128,7 @@ export function calculateTama38(
   // סיכום חישוב שטחים
   // ========================================
   const totalUnitsForCalc = potentialUnitsHigh
-  const numberOfFloors = `עד${Math.ceil(totalUnitsForCalc / existingUnitsPerFloor || 2)}קומות`
+  const numberOfFloors = `עד ${Math.ceil(totalUnitsForCalc / (existingUnitsPerFloor || 2))} קומות`
   const maxUnitsPerFloor = Math.min(totalUnitsForCalc, 15)
 
   // ממ"ד = 12 מ"ר × מספר דירות
@@ -109,12 +146,14 @@ export function calculateTama38(
 
   // שטח עיקרי מוחזר לדיירים
   const avgExistingUnitSize = existingContour / (existingUnitsPerFloor || 1)
-  const returnedPrimaryPerTenant = avgExistingUnitSize + returnPerUnit
+  const returnedPrimaryPerTenant = avgExistingUnitSize + primaryReturnPerUnit
   const returnedPrimaryToTenants = Math.round(returnedPrimaryPerTenant * existingUnitsToReturn)
 
-  // שטח פלדלת מוחזר לדיירים
-  const returnedServicePerTenant = mamadPerUnit + balconyPerUnit
-  const returnedServiceToTenants = returnedServicePerTenant * existingUnitsToReturn
+  // ממ"ד מוחזר לדיירים (MAMAD only, separate from balcony — Test 3)
+  const returnedMamadToTenants = mamadReturnPerUnit * existingUnitsToReturn
+
+  // Legacy: service returned = MAMAD only for tenants
+  const returnedServiceToTenants = returnedMamadToTenants
 
   // שטח נותר ליזם
   const developerPrimary = totalPrimaryArea - returnedPrimaryToTenants
@@ -124,6 +163,37 @@ export function calculateTama38(
   // שטחים כוללים לפרויקט
   const totalPrimaryProject = totalPrimaryArea
   const totalServiceProject = totalServiceArea
+
+  // ========================================
+  // Section 6b: Paledelet (פלדלת)
+  // פלדלת = שטח עיקרי + ממ"ד (ללא מרפסת)
+  // ========================================
+  const totalPaledelet = totalPrimaryArea + totalMamad
+  const returnedPaledelToTenants = returnedPrimaryToTenants + returnedMamadToTenants
+  const developerPaledelet = totalPaledelet - returnedPaledelToTenants
+
+  // ========================================
+  // Section 7: MAMAD Cap (תקרת ממ"ד - תקנה 2025)
+  // ========================================
+  const mamadSize = buildingInput.mamadSize ?? TAMA38_RULES.MAMAD_PER_UNIT
+  const mamadExcessPerUnit = Math.max(0, mamadSize - TAMA38_RULES.MAMAD_MAX_NET)
+  const mamadExcessDeduction = mamadExcessPerUnit * Math.max(0, developerUnitsHigh)
+  const mamadCapWarning = mamadExcessPerUnit > 0
+
+  // Adjust developer primary for MAMAD excess
+  const adjustedDeveloperPrimary = developerPrimary - mamadExcessDeduction
+
+  // ========================================
+  // Section 8: Inclusive Housing (דיור מכליל)
+  // ========================================
+  const inclusiveDistrict = findInclusiveHousingDistrict(geoData.neighborhood)
+  const inclusiveHousingApplies = inclusiveDistrict !== null
+  const inclusiveHousingRate = inclusiveDistrict?.rate ?? 0
+  const inclusiveHousingUnits = inclusiveHousingApplies
+    ? Math.ceil(developerUnitsHigh * inclusiveHousingRate)
+    : 0
+  const inclusiveHousingArea = inclusiveHousingUnits * (inclusiveDistrict?.maxUnitSize ?? 55)
+  const developerMarketableUnits = developerUnitsHigh - inclusiveHousingUnits
 
   // ========================================
   // Building info for display
@@ -160,6 +230,9 @@ export function calculateTama38(
 
     // Section 4
     minApartmentSize: avgSize,
+    areaBasedUnitsLow,
+    areaBasedUnitsHigh,
+    densityBasedUnits,
     potentialUnitsLow,
     potentialUnitsHigh,
     existingUnitsToReturn,
@@ -177,11 +250,29 @@ export function calculateTama38(
 
     // Section 6
     returnedPrimaryToTenants,
+    returnedMamadToTenants,
     returnedServiceToTenants,
-    developerPrimary,
+    developerPrimary: adjustedDeveloperPrimary,
     developerService,
     totalPrimaryProject,
     totalServiceProject,
+
+    // Section 6b: Paledelet
+    totalPaledelet,
+    returnedPaledelToTenants,
+    developerPaledelet,
+
+    // Section 7: MAMAD Cap
+    mamadExcessPerUnit,
+    mamadExcessDeduction,
+    mamadCapWarning,
+
+    // Section 8: Inclusive Housing
+    inclusiveHousingApplies,
+    inclusiveHousingRate,
+    inclusiveHousingUnits,
+    inclusiveHousingArea,
+    developerMarketableUnits,
 
     // Building info
     buildingInfo: {

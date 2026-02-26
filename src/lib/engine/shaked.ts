@@ -33,18 +33,36 @@ export function calculateShaked(
   // The Shaked total is the MAX of:
   // 1. The TAMA 38 calculated total (standard)
   // 2. The Shaked enhanced ceiling (400% of existing building)
-  // In practice, Shaked usually provides MORE rights than standard TAMA
   const shakedPrimaryArea = Math.max(tama38.totalPrimaryArea, Math.round(shakedMaxArea))
 
   // ========================================
-  // Fix: Recalculate units from Shaked's larger area
-  // (Instead of inheriting TAMA 38's lower unit count)
+  // Recalculate units from Shaked's larger area
   // ========================================
   const avgSize = buildingInput.minApartmentSize || TAMA38_RULES.DEFAULT_AVG_APARTMENT
-  const shakedUnitsLow = Math.floor(shakedPrimaryArea / avgSize)
-  const shakedUnitsHigh = Math.ceil(shakedPrimaryArea / avgSize)
-  const shakedDevUnitsLow = shakedUnitsLow - buildingInput.totalExistingUnits
-  const shakedDevUnitsHigh = shakedUnitsHigh - buildingInput.totalExistingUnits
+
+  // Area-based derivation
+  const areaBasedLow = Math.floor(shakedPrimaryArea / avgSize)
+  const areaBasedHigh = Math.ceil(shakedPrimaryArea / avgSize)
+
+  // Density-based derivation (same logic as TAMA 38 — Test 2)
+  const plotArea = buildingInput.plotArea || geoData.plotArea
+  const densityPerDunam = buildingInput.densityPerDunam
+  let densityBasedUnits: number | undefined
+  if (densityPerDunam && densityPerDunam > 0 && plotArea > 0) {
+    densityBasedUnits = Math.floor((plotArea / 1000) * densityPerDunam)
+  }
+
+  const shakedUnitsLow = densityBasedUnits !== undefined
+    ? Math.max(areaBasedLow, densityBasedUnits)
+    : areaBasedLow
+  const shakedUnitsHigh = densityBasedUnits !== undefined
+    ? Math.max(areaBasedHigh, densityBasedUnits)
+    : areaBasedHigh
+
+  // Rights holders for return (Test 3)
+  const rightsHolders = buildingInput.totalRightsHolders ?? buildingInput.totalExistingUnits
+  const shakedDevUnitsLow = shakedUnitsLow - rightsHolders
+  const shakedDevUnitsHigh = shakedUnitsHigh - rightsHolders
 
   // Recalculate service areas based on Shaked unit count
   const shakedTotalUnitsForCalc = shakedUnitsHigh
@@ -56,12 +74,22 @@ export function calculateShaked(
   const shakedTotalService = shakedTotalMamad + shakedTotalBalcony
   const shakedDeveloperService = shakedTotalService - tama38.returnedServiceToTenants
 
+  // Paledelet (Test 3)
+  const shakedTotalPaledelet = shakedPrimaryArea + shakedTotalMamad
+  const shakedReturnedPaledelToTenants = tama38.returnedPaledelToTenants
+  const shakedDeveloperPaledelet = shakedTotalPaledelet - shakedReturnedPaledelToTenants
+
+  // MAMAD Cap (Test 4.2)
+  const mamadSize = buildingInput.mamadSize ?? TAMA38_RULES.MAMAD_PER_UNIT
+  const mamadExcessPerUnit = Math.max(0, mamadSize - TAMA38_RULES.MAMAD_MAX_NET)
+  const mamadExcessDeduction = mamadExcessPerUnit * Math.max(0, shakedDevUnitsHigh)
+  const mamadCapWarning = mamadExcessPerUnit > 0
+  const adjustedDeveloperPrimary = shakedDeveloperPrimary - mamadExcessDeduction
+
   // Betterment levy calculation
   const bettermentLevyRate = SHAKED_RULES.BETTERMENT_LEVY_RATE
-  const additionalArea = shakedPrimaryArea - tama38.tbeTotal // Area above base TBE rights
+  const additionalArea = shakedPrimaryArea - tama38.tbeTotal
 
-  // Betterment levy estimate: only calculated if user provides a value per m²
-  // Without a real market valuation, displaying an estimate would be misleading
   let bettermentLevyAmount: number | null = null
   if (estimatedValuePerSqm && estimatedValuePerSqm > 0) {
     bettermentLevyAmount = Math.round(additionalArea * estimatedValuePerSqm * bettermentLevyRate)
@@ -83,10 +111,22 @@ export function calculateShaked(
     totalUnitsForCalc: shakedTotalUnitsForCalc,
     totalMamad: shakedTotalMamad,
     totalBalcony: shakedTotalBalcony,
-    developerPrimary: shakedDeveloperPrimary,
+    developerPrimary: adjustedDeveloperPrimary,
     developerService: shakedDeveloperService,
     totalPrimaryProject: shakedPrimaryArea,
     totalServiceProject: shakedTotalService,
+
+    // Paledelet overrides
+    totalPaledelet: shakedTotalPaledelet,
+    returnedPaledelToTenants: shakedReturnedPaledelToTenants,
+    developerPaledelet: shakedDeveloperPaledelet,
+
+    // MAMAD Cap overrides
+    mamadExcessPerUnit,
+    mamadExcessDeduction,
+    mamadCapWarning,
+
+    // Inclusive housing inherited from tama38 (same neighborhood check)
 
     // Shaked-specific fields
     shakedMultiplier,

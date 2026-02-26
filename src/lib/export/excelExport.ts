@@ -18,6 +18,7 @@ const COLORS = {
   PURPLE: '7C3AED',
   TEAL: '0D9488',
   RED: 'B91C1C',
+  INDIGO: '4338CA',
   GRAY_HEADER: 'E5E7EB',
   GRAY_LIGHT: 'F9FAFB',
   AMBER_LIGHT: 'FFFBEB',
@@ -49,8 +50,8 @@ export async function generateEfesExcel(
     addShakedSheet(workbook, shaked, tama38)
   }
 
-  // Sheet 3: HFP/2666 (if available)
-  if (hfp2666 && hfp2666.districtDataAvailable) {
+  // Sheet 3: HFP/2666 (if available — includes strengthening-only and Building H)
+  if (hfp2666 && (hfp2666.districtDataAvailable || hfp2666.isStrengtheningOnly || hfp2666.isBuildingH)) {
     addHfp2666Sheet(workbook, hfp2666)
   }
 
@@ -147,8 +148,12 @@ function addTama38Sheet(
   // ---- Section 4: Unit Derivation ----
   addSectionHeader(ws, 'גזירת יחידות דיור', COLORS.HAIFA_BLUE)
   addDataRow(ws, 'שטח דירה ממוצעת', result.minApartmentSize)
+  addDataRow(ws, 'גזירת דירות לפי שטח', `${result.areaBasedUnitsLow}-${result.areaBasedUnitsHigh}`)
+  if (result.densityBasedUnits !== undefined) {
+    addDataRow(ws, 'גזירת דירות לפי צפיפות', result.densityBasedUnits)
+  }
   addDataRow(ws, 'סה"כ מס. דירות עפ"י מדיניות 2020', `${result.potentialUnitsLow}-${result.potentialUnitsHigh}`)
-  addDataRow(ws, 'דירות קיימות', result.existingUnitsToReturn)
+  addDataRow(ws, 'דירות מוחזרות (בעלי זכויות)', result.existingUnitsToReturn)
   addSubtotalRow(ws, 'דירות מוצעות (יזם)', `${result.developerUnitsLow}-${result.developerUnitsHigh}`)
 
   ws.addRow([]) // spacer
@@ -161,14 +166,33 @@ function addTama38Sheet(
 
   ws.addRow([]) // spacer
 
-  // ---- Section 6: Economic Split ----
+  // ---- Section 6: Economic Split (Paledelet) ----
   addSectionHeader(ws, 'סיכום: חלוקה כלכלית', COLORS.HAIFA_BLUE)
   addDataRow(ws, 'סה"כ החזרת שטח עיקרי לדיירים', result.returnedPrimaryToTenants)
-  addDataRow(ws, 'סה"כ החזרת שטח פלדלת לדיירים', result.returnedServiceToTenants)
+  addDataRow(ws, 'סה"כ ממ"ד מוחזר לדיירים', result.returnedMamadToTenants)
+  addDataRow(ws, 'סה"כ פלדלת מוחזר לדיירים', result.returnedPaledelToTenants)
   addSubtotalRow(ws, 'סה"כ שטח עיקרי נותר ליזם', result.developerPrimary)
-  addSubtotalRow(ws, 'סה"כ שטח פלדלת נותר ליזם', result.developerService)
+  addSubtotalRow(ws, 'סה"כ פלדלת נותר ליזם', result.developerPaledelet)
   addTotalRow(ws, 'סה"כ שטח עיקרי לפרויקט', result.totalPrimaryProject)
-  addTotalRow(ws, 'סה"כ שטח פלדלת לפרויקט', result.totalServiceProject)
+  addTotalRow(ws, 'סה"כ פלדלת לפרויקט', result.totalPaledelet)
+
+  ws.addRow([]) // spacer
+
+  // ---- Section 7: MAMAD Cap ----
+  if (result.mamadCapWarning) {
+    addSectionHeader(ws, 'תקרת ממ"ד 12 מ"ר (תקנה 2025)', COLORS.RED)
+    addDataRow(ws, 'עודף ממ"ד ליחידה', `${result.mamadExcessPerUnit} מ"ר`)
+    addDataRow(ws, 'סה"כ ניכוי משטח עיקרי ליזם', `${result.mamadExcessDeduction} מ"ר`)
+  }
+
+  // ---- Section 8: Inclusive Housing ----
+  if (result.inclusiveHousingApplies) {
+    addSectionHeader(ws, 'דיור מכליל (חפ/מד/2699)', COLORS.INDIGO)
+    addDataRow(ws, 'שיעור דיור מכליל', `${Math.round(result.inclusiveHousingRate * 100)}%`)
+    addDataRow(ws, 'יח"ד מכליל', result.inclusiveHousingUnits)
+    addDataRow(ws, 'שטח דיור מכליל', `${result.inclusiveHousingArea} מ"ר`)
+    addSubtotalRow(ws, 'דירות שוק ליזם', result.developerMarketableUnits)
+  }
 
   ws.addRow([]) // spacer
 
@@ -215,10 +239,42 @@ function addShakedSheet(
 
   // Units
   addSectionHeader(ws, 'יחידות דיור', COLORS.PURPLE)
-  addDataRow(ws, 'שטח דירה מינימלי', result.minApartmentSize)
+  addDataRow(ws, 'שטח דירה ממוצעת', result.minApartmentSize)
+  addDataRow(ws, 'גזירת דירות לפי שטח', `${result.areaBasedUnitsLow}-${result.areaBasedUnitsHigh}`)
+  if (result.densityBasedUnits !== undefined) {
+    addDataRow(ws, 'גזירת דירות לפי צפיפות', result.densityBasedUnits)
+  }
   addDataRow(ws, 'סה"כ דירות פוטנציאליות', `${result.potentialUnitsLow}-${result.potentialUnitsHigh}`)
-  addDataRow(ws, 'דירות מוחזרות לדיירים', result.existingUnitsToReturn)
+  addDataRow(ws, 'דירות מוחזרות (בעלי זכויות)', result.existingUnitsToReturn)
   addSubtotalRow(ws, 'דירות יזם', `${result.developerUnitsLow}-${result.developerUnitsHigh}`)
+
+  ws.addRow([])
+
+  // Paledelet split
+  addSectionHeader(ws, 'סיכום: חלוקה כלכלית', COLORS.PURPLE)
+  addDataRow(ws, 'סה"כ החזרת שטח עיקרי לדיירים', result.returnedPrimaryToTenants)
+  addDataRow(ws, 'סה"כ פלדלת מוחזר לדיירים', result.returnedPaledelToTenants)
+  addSubtotalRow(ws, 'סה"כ שטח עיקרי נותר ליזם', result.developerPrimary)
+  addSubtotalRow(ws, 'סה"כ פלדלת נותר ליזם', result.developerPaledelet)
+  addTotalRow(ws, 'סה"כ פלדלת לפרויקט', result.totalPaledelet)
+
+  ws.addRow([])
+
+  // MAMAD Cap
+  if (result.mamadCapWarning) {
+    addSectionHeader(ws, 'תקרת ממ"ד 12 מ"ר (תקנה 2025)', COLORS.RED)
+    addDataRow(ws, 'עודף ממ"ד ליחידה', `${result.mamadExcessPerUnit} מ"ר`)
+    addDataRow(ws, 'סה"כ ניכוי משטח עיקרי ליזם', `${result.mamadExcessDeduction} מ"ר`)
+  }
+
+  // Inclusive Housing
+  if (result.inclusiveHousingApplies) {
+    ws.addRow([])
+    addSectionHeader(ws, 'דיור מכליל (חפ/מד/2699)', COLORS.INDIGO)
+    addDataRow(ws, 'שיעור דיור מכליל', `${Math.round(result.inclusiveHousingRate * 100)}%`)
+    addDataRow(ws, 'יח"ד מכליל', result.inclusiveHousingUnits)
+    addSubtotalRow(ws, 'דירות שוק ליזם', result.developerMarketableUnits)
+  }
 
   ws.addRow([])
 
@@ -259,35 +315,74 @@ function addHfp2666Sheet(
 
   ws.addRow([])
 
-  // District info
-  addSectionHeader(ws, `מתחם ${result.district?.id}: ${result.district?.name}`, COLORS.TEAL)
-  addDataRow(ws, 'מכפיל מתחם', result.multiplier != null ? `${(result.multiplier * 100)}%` : '---')
-  addDataRow(ws, 'מקסימום קומות', result.district?.maxFloors ?? '---')
-  addDataRow(ws, 'צפיפות', result.district?.unitsPerDunam ? `${result.district.unitsPerDunam.join('-')} יח"ד/דונם` : '---')
+  // Building H mode
+  if (result.isBuildingH) {
+    addSectionHeader(ws, 'מבני H — כלל העיר (פי 3 מהנפח הקיים)', COLORS.TEAL)
+    addDataRow(ws, 'נפח קיים (קונטור × קומות)', result.existingGrossArea ?? '---')
+    addDataRow(ws, 'מכפיל (×3)', result.rawPrimaryArea ?? '---')
+    addDataRow(ws, 'תקרה לפי קומות (מקס. 12)', result.maxByFloors ?? '---')
+    addTotalRow(ws, 'סה"כ שטח עיקרי סופי', result.finalPrimaryArea ?? '---', true)
+  } else {
+    // District & sub-area info
+    addSectionHeader(ws, `מתחם ${result.district?.id}: ${result.district?.name}`, COLORS.TEAL)
+    if (result.subArea) {
+      addDataRow(ws, 'תת-אזור', result.subArea.name)
+    }
+    addDataRow(ws, 'מכפיל מתחם', result.multiplier != null ? `${(result.multiplier * 100)}%` : '---')
+    addDataRow(ws, 'מקסימום קומות', result.subArea?.maxFloors ?? '---')
+    addDataRow(ws, 'צפיפות', result.subArea?.unitsPerDunam ? `${result.subArea.unitsPerDunam} יח"ד/דונם` : '---')
+    if (result.commercialBonus > 0) {
+      addDataRow(ws, 'תוספת מסחרי', `${Math.round(result.commercialBonus * 100)}%`)
+    }
+    if (result.isSmallBuildingOverride) {
+      addDataRow(ws, 'הגבלת מבנה קטן (<4 יח"ד)', 'מוגבל ל-135%, 8 יח"ד/דונם, 6 קומות')
+    }
 
-  ws.addRow([])
+    ws.addRow([])
 
-  // Calculation
-  addSectionHeader(ws, 'חישוב שטחים - חפ/2666 מסלול הריסה ובנייה', COLORS.TEAL)
-  addDataRow(ws, 'שטח מגרש', result.plotArea)
-  addDataRow(ws, `מכפיל מתחם (${result.multiplier ? `${result.multiplier * 100}%` : '---'})`, result.rawPrimaryArea ?? '---')
-  addDataRow(ws, `תקרה לפי קומות (מקס. ${result.district?.maxFloors})`, result.maxByFloors ?? '---')
-  addDataRow(ws, 'תקרה לפי צפיפות (יח"ד/דונם)', result.maxByDensity ?? '---')
-  addTotalRow(ws, 'סה"כ שטח עיקרי סופי', result.finalPrimaryArea ?? '---', true)
+    // Strengthening-only result
+    if (result.isStrengtheningOnly) {
+      addSectionHeader(ws, 'חיזוק בלבד', COLORS.TEAL)
+      addDataRow(ws, 'דירות קיימות', result.existingUnitsToReturn)
+      addDataRow(ws, 'תוספת ליחידה', '25 מ"ר')
+      addTotalRow(ws, 'סה"כ תוספת', result.strengthenAddition ?? '---', true)
+      return
+    }
+
+    // Calculation
+    addSectionHeader(ws, 'חישוב שטחים - חפ/2666 מסלול הריסה ובנייה', COLORS.TEAL)
+    addDataRow(ws, 'שטח מגרש', result.plotArea)
+    addDataRow(ws, `מכפיל מתחם (${result.multiplier ? `${result.multiplier * 100}%` : '---'})`, result.rawPrimaryArea ?? '---')
+    addDataRow(ws, `תקרה לפי קומות (מקס. ${result.subArea?.maxFloors})`, result.maxByFloors ?? '---')
+    addDataRow(ws, `תקרה לפי צפיפות (${result.subArea?.unitsPerDunam} יח"ד/דונם)`, result.maxByDensity ?? '---')
+    addTotalRow(ws, 'סה"כ שטח עיקרי סופי', result.finalPrimaryArea ?? '---', true)
+  }
 
   ws.addRow([])
 
   // Units
   addDataRow(ws, 'דירות פוטנציאליות', result.potentialUnitsLow != null ? `${result.potentialUnitsLow}-${result.potentialUnitsHigh}` : '---')
-  addDataRow(ws, 'דירות מוחזרות לדיירים', result.existingUnitsToReturn)
+  addDataRow(ws, 'דירות מוחזרות (בעלי זכויות)', result.existingUnitsToReturn)
   addSubtotalRow(ws, 'דירות יזם', result.developerUnitsLow != null ? `${result.developerUnitsLow}-${result.developerUnitsHigh}` : '---')
 
   ws.addRow([])
 
-  // Split
+  // Paledelet split
   addSectionHeader(ws, 'סיכום חלוקה', COLORS.TEAL)
   addDataRow(ws, 'שטח עיקרי מוחזר לדיירים', result.returnedPrimaryToTenants)
+  addDataRow(ws, 'פלדלת מוחזר לדיירים', result.returnedPaledelToTenants)
   addSubtotalRow(ws, 'שטח עיקרי נותר ליזם', result.developerPrimary ?? '---')
+  addSubtotalRow(ws, 'פלדלת נותר ליזם', result.developerPaledelet ?? '---')
+  addTotalRow(ws, 'סה"כ פלדלת לפרויקט', result.totalPaledelet ?? '---')
+
+  // Inclusive Housing
+  if (result.inclusiveHousingApplies) {
+    ws.addRow([])
+    addSectionHeader(ws, 'דיור מכליל (חפ/מד/2699)', COLORS.INDIGO)
+    addDataRow(ws, 'שיעור דיור מכליל', `${Math.round(result.inclusiveHousingRate * 100)}%`)
+    addDataRow(ws, 'יח"ד מכליל', result.inclusiveHousingUnits)
+    addSubtotalRow(ws, 'דירות שוק ליזם', result.developerMarketableUnits ?? '---')
+  }
 }
 
 function addComparisonSheet(
@@ -355,6 +450,12 @@ function addComparisonSheet(
     fmt(hfp2666?.developerPrimary),
     true
   )
+  addCompRow(ws, 'פלדלת ליזם (מ"ר)',
+    fmt(tama38.developerPaledelet),
+    fmt(shaked?.developerPaledelet),
+    fmt(hfp2666?.developerPaledelet),
+    true
+  )
   addCompRow(ws, 'שטח ממ"ד כולל (מ"ר)',
     fmt(tama38.totalMamad),
     fmt(shaked?.totalMamad),
@@ -364,6 +465,16 @@ function addComparisonSheet(
     fmt(tama38.totalBalcony),
     fmt(shaked?.totalBalcony),
     fmt(hfp2666?.totalBalcony)
+  )
+  addCompRow(ws, 'דיור מכליל (יח"ד)',
+    fmt(tama38.inclusiveHousingUnits || 0),
+    fmt(shaked?.inclusiveHousingUnits || 0),
+    fmt(hfp2666?.inclusiveHousingUnits || 0)
+  )
+  addCompRow(ws, 'דירות שוק ליזם',
+    fmt(tama38.developerMarketableUnits),
+    fmt(shaked?.developerMarketableUnits),
+    fmt(hfp2666?.developerMarketableUnits)
   )
   addCompRow(ws, 'היטל השבחה',
     'פטור',
