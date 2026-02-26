@@ -3,9 +3,9 @@
 import dynamic from 'next/dynamic'
 import { CalculatorPanel } from '@/components/calculator/CalculatorPanel'
 
-// MapLibre must be loaded client-side only (no SSR)
-const MapContainer = dynamic(
-  () => import('@/components/map/MapContainer').then(mod => ({ default: mod.MapContainer })),
+// Map switcher handles both 2D (MapLibre) and 3D (ArcGIS) — must be client-side only
+const MapViewSwitcher = dynamic(
+  () => import('@/components/map/MapViewSwitcher').then(mod => ({ default: mod.MapViewSwitcher })),
   { ssr: false, loading: () => <MapLoadingPlaceholder /> }
 )
 
@@ -28,9 +28,9 @@ export default function HomePage() {
         <CalculatorPanel />
       </div>
 
-      {/* Left side - Map */}
+      {/* Left side - Map (2D/3D) */}
       <div className="flex-1 h-full relative">
-        <MapContainer />
+        <MapViewSwitcher />
       </div>
     </main>
   )

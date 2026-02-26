@@ -53,6 +53,7 @@ export const useStore = create<AppState>((set) => ({
     'unesco-core': false,
     'unesco-buffer': false,
   },
+  mapMode: '3d',
 
   // HFP/2666 manual overrides
   manualHfpDistrictId: null,
@@ -79,6 +80,7 @@ export const useStore = create<AppState>((set) => ({
         [layerId]: !state.layerVisibility[layerId],
       },
     })),
+  setMapMode: (mode) => set({ mapMode: mode }),
   setManualHfpDistrict: (districtId, subAreaId) =>
     set({
       manualHfpDistrictId: districtId,

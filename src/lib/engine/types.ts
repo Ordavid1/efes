@@ -280,6 +280,7 @@ export interface AppState {
   isLoading: boolean
   error: string | null
   layerVisibility: Record<string, boolean>
+  mapMode: '2d' | '3d'
 
   // HFP/2666 manual overrides
   manualHfpDistrictId: number | null
@@ -297,6 +298,7 @@ export interface AppState {
   setLoading: (loading: boolean) => void
   setError: (error: string | null) => void
   toggleLayer: (layerId: string) => void
+  setMapMode: (mode: '2d' | '3d') => void
   setManualHfpDistrict: (districtId: number | null, subAreaId?: string | null) => void
   resetAll: () => void
 }

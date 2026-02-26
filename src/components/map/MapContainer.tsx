@@ -4,13 +4,14 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { useStore } from '@/lib/hooks/useStore'
+import { useParcelSelection } from '@/lib/hooks/useParcelSelection'
 import { LayerControls } from './LayerControls'
 import { ParcelSearch } from './ParcelSearch'
 
 // Initialize RTL text plugin for Hebrew labels (call once)
 try {
   maplibregl.setRTLTextPlugin(
-    'https://unpkg.com/@mapbox/mapbox-gl-rtl-text@0.3.0/dist/mapbox-gl-rtl-text.js',
+    'https://unpkg.com/@maplibre/maplibre-gl-rtl-text@0.1.3/dist/maplibre-gl-rtl-text.umd.js',
     true // lazy load
   )
 } catch {
@@ -18,7 +19,7 @@ try {
 }
 
 // GeoJSON overlay layer configurations (zoning removed - now via WMS tiles)
-const GEO_LAYERS = [
+export const GEO_LAYERS = [
   { id: 'neighborhoods', file: 'neighborhoods.geojson', color: '#2d8a4e', opacity: 0.3, type: 'line' as const, name: 'שכונות' },
   { id: 'conservation-buildings', file: 'conservation-buildings.geojson', color: '#c0392b', opacity: 0.6, type: 'fill' as const, name: 'מבנים לשימור' },
   { id: 'preservation-areas', file: 'preservation-areas.geojson', color: '#e67e22', opacity: 0.2, type: 'fill' as const, name: 'מתחמים לשימור' },
@@ -44,30 +45,10 @@ export function MapContainer() {
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
   const [mapLoaded, setMapLoaded] = useState(false)
-  const [clickLoading, setClickLoading] = useState(false)
   const [showZoomHint, setShowZoomHint] = useState(false)
-  // Store the clicked gush/helka to sync with search bar
-  const [clickedGush, setClickedGush] = useState<number | null>(null)
-  const [clickedHelka, setClickedHelka] = useState<number | null>(null)
 
-  const { layerVisibility, setSelectedParcel, setParcelGeoData, setLoading } = useStore()
-
-  // Fetch enrichment data from server-side API
-  const fetchEnrichment = useCallback(async (lng: number, lat: number, gush?: number, helka?: number) => {
-    let url = `/api/enrich?lng=${lng}&lat=${lat}`
-    if (gush !== undefined && helka !== undefined) {
-      url += `&gush=${gush}&helka=${helka}`
-    }
-    try {
-      const response = await fetch(url)
-      if (response.ok) {
-        return await response.json()
-      }
-    } catch (err) {
-      console.error('Enrichment API error:', err)
-    }
-    return {}
-  }, [])
+  const { layerVisibility, parcelGeoData } = useStore()
+  const { clickLoading, clickedGush, clickedHelka, fetchEnrichment, selectParcelAtPoint } = useParcelSelection()
 
   // Handle map click - identify parcel and auto-fill everything
   const handleMapClick = useCallback(async (e: maplibregl.MapMouseEvent) => {
@@ -79,76 +60,26 @@ export function MapContainer() {
     // Only trigger parcel selection at zoom levels where parcels are visible
     if (map.getZoom() < 14) return
 
-    setClickLoading(true)
-    setLoading(true)
+    const result = await selectParcelAtPoint(lng, lat)
 
-    try {
-      // Query GovMap WFS for the parcel at clicked location via bbox proxy
-      const delta = 0.0001 // ~10m tolerance
-      const bbox = `${lng - delta},${lat - delta},${lng + delta},${lat + delta}`
-      const response = await fetch(`/api/govmap/bbox?bbox=${bbox}`)
-      const data = await response.json()
-
-      if (data.features?.length > 0) {
-        const feature = data.features[0]
-        const props = feature.properties || {}
-        const gush = Number(props.GUSH_NUM)
-        const helka = Number(props.PARCEL)
-        const plotArea = props.SHAPE_Area ? Math.round(Number(props.SHAPE_Area)) : 0
-
-        if (!gush || !helka) return
-
-        // Update search bar inputs
-        setClickedGush(gush)
-        setClickedHelka(helka)
-
-        // Set selection in store
-        const parcelId = { gush, helka }
-        setSelectedParcel(parcelId)
-
-        // Run server-side spatial enrichment
-        const enriched = await fetchEnrichment(lng, lat, gush, helka)
-
-        // Set full parcel geo data with ALL fields populated
-        setParcelGeoData({
-          parcelId,
-          plotArea,
-          neighborhood: enriched.neighborhood || null,
-          quarter: enriched.quarter || null,
-          subQuarter: enriched.subQuarter || null,
-          zoningType: enriched.zoningType || null,
-          streetName: enriched.streetName || null,
-          isConservationBuilding: enriched.isConservationBuilding || false,
-          isInPreservationArea: enriched.isInPreservationArea || false,
-          isArchaeologicalSite: enriched.isArchaeologicalSite || false,
-          isUnescoCore: enriched.isUnescoCore || false,
-          isUnescoBuffer: enriched.isUnescoBuffer || false,
-          polygon: feature,
-        })
-
-        // Highlight selected parcel
-        const source = map.getSource('selected-parcel') as maplibregl.GeoJSONSource
-        if (source) {
-          source.setData({
-            type: 'FeatureCollection',
-            features: [feature],
-          })
-        }
-
-        // Fly to parcel
-        map.flyTo({
-          center: [lng, lat],
-          zoom: Math.max(map.getZoom(), 17),
-          duration: 1000,
+    if (result) {
+      // Highlight selected parcel
+      const source = map.getSource('selected-parcel') as maplibregl.GeoJSONSource
+      if (source) {
+        source.setData({
+          type: 'FeatureCollection',
+          features: [result.feature],
         })
       }
-    } catch (err) {
-      console.error('Failed to select parcel:', err)
-    } finally {
-      setClickLoading(false)
-      setLoading(false)
+
+      // Fly to parcel
+      map.flyTo({
+        center: [lng, lat],
+        zoom: Math.max(map.getZoom(), 17),
+        duration: 1000,
+      })
     }
-  }, [clickLoading, fetchEnrichment, setSelectedParcel, setParcelGeoData, setLoading])
+  }, [clickLoading, selectParcelAtPoint])
 
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return
@@ -167,7 +98,6 @@ export function MapContainer() {
 
     map.on('load', () => {
       // === GovMap WMS Parcel Tile Layer ===
-      // Renders parcel boundaries directly from GovMap servers (always up-to-date)
       map.addSource('govmap-parcels', {
         type: 'raster',
         tiles: [
@@ -265,6 +195,18 @@ export function MapContainer() {
           'line-opacity': 0.9,
         },
       })
+
+      // Restore selected parcel if one exists (e.g. switching back from 3D)
+      const currentGeoData = useStore.getState().parcelGeoData
+      if (currentGeoData?.polygon) {
+        const source = map.getSource('selected-parcel') as maplibregl.GeoJSONSource
+        if (source) {
+          source.setData({
+            type: 'FeatureCollection',
+            features: [currentGeoData.polygon as GeoJSON.Feature],
+          })
+        }
+      }
 
       setMapLoaded(true)
     })

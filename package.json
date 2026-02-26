@@ -11,6 +11,7 @@
     "process-shp": "npx tsx scripts/process-shp.ts"
   },
   "dependencies": {
+    "@arcgis/core": "^5.0.4",
     "@turf/turf": "^7.1.0",
     "clsx": "^2.1.0",
     "exceljs": "^4.4.0",
